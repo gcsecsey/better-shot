@@ -127,6 +127,10 @@ internal history, creates the first export in the configured folder, and updates
 the associated export via atomic replace on later saves. Copy and Share do not
 create or update that export. Export opens an NSSavePanel for a new destination.
 
+Saving an external image keeps an independent original beside its history file,
+separate from the crop base. Unchanged images are not re-encoded. Unsupported
+overwrite formats use the configured export folder and format.
+
 General > Default Look supplies background, padding, corner radius, and shadow
 for new images and videos. Saved projects retain their own settings.
 

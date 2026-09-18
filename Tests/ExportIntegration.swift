@@ -726,6 +726,24 @@ private func checkExternalImageSaving(image: CGImage, directory: URL) throws {
         precondition((try? Data(contentsOf: jpeg)) == jpegBytes, "Saving an untouched JPEG must preserve its bytes")
     }
     print("PASS repeated Save of an untouched JPEG preserves its bytes")
+    let uncroppedBytes = try Data(contentsOf: saved)
+    let crop = AnnotationImageCropper.crop(url: saved, normalizedRect: CGRect(x: 0, y: 0, width: 0.5, height: 0.5))!
+    defer { try? FileManager.default.removeItem(at: crop.url) }
+    let store = ScreenshotHistoryStore.shared
+    let committed = store.commitAnnotations(displayURL: saved, baseURL: crop.url, renderedURL: crop.url,
+        document: AnnotationDocument(shapes: [], background: AnnotationBackgroundSettings()))
+    let originalCopy = committed.appendingPathExtension("original")
+    for _ in 0..<2 {
+        _ = try ScreenshotFileActions.saveCapture(from: committed, for: committed, replacing: saved)
+        guard (try? Data(contentsOf: originalCopy)) == uncroppedBytes else {
+            throw NSError(domain: "ExternalImageSaveCheck", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Crop Save lost the uncropped original"])
+        }
+    }
+    precondition(ScreenshotImageLoader.imageSize(at: saved) == CGSize(width: 960, height: 540))
+    store.delete(store.items.first { $0.url == committed }!)
+    precondition(!FileManager.default.fileExists(atPath: originalCopy.path))
+    print("PASS crop Save preserves the original across repeated saves and history deletion removes its backup")
 }
 
 @MainActor

@@ -126,6 +126,21 @@ final class ScreenshotHistoryStore {
         displayURL.appendingPathExtension("bettershot")
     }
 
+    static func originalImageURL(for displayURL: URL) -> URL {
+        displayURL.appendingPathExtension("original")
+    }
+
+    func preserveExternalOriginal(from originalURL: URL, for displayURL: URL) throws {
+        guard let item = items.first(where: { $0.url.standardizedFileURL == displayURL.standardizedFileURL })
+            ?? items.first(where: { $0.sourceCapturePath == originalURL.standardizedFileURL.path }) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        let backup = Self.originalImageURL(for: item.url)
+        guard !FileManager.default.fileExists(atPath: backup.path) else { return }
+        // The editable base changes after cropping; this copy must never change.
+        try Data(contentsOf: originalURL, options: .mappedIfSafe).write(to: backup, options: .atomic)
+    }
+
     /// Location of the untouched base image for a display image,
     /// e.g. `BetterShot_2026.png` -> `BetterShot_2026.base.png`.
     static func baseImageURL(for displayURL: URL) -> URL {
@@ -413,6 +428,7 @@ final class ScreenshotHistoryStore {
             auxiliaryURLs = [
                 item.url,
                 Self.baseImageURL(for: item.url),
+                Self.originalImageURL(for: item.url),
                 Self.editDocumentURL(for: item.url)
             ]
         }
@@ -538,6 +554,23 @@ final class ScreenshotHistoryStore {
             return item.url
         }
         return rawURL
+    }
+
+    /// The file outside BetterShot this image was opened from, so editor Save
+    /// writes back to it. Captures return nil and keep using the save folder.
+    func externalOriginURL(for displayURL: URL) -> URL? {
+        let standardized = displayURL.standardizedFileURL
+        let candidate = items.first(where: { $0.url.standardizedFileURL == standardized })?
+            .sourceCapturePath.map { URL(fileURLWithPath: $0) } ?? displayURL
+        guard candidate.isFileURL, !Self.isManaged(candidate),
+              FileManager.default.fileExists(atPath: candidate.path) else { return nil }
+        return candidate
+    }
+
+    /// History, deck staging, and capture records share one parent folder.
+    private static func isManaged(_ url: URL) -> Bool {
+        url.standardizedFileURL.path
+            .hasPrefix(applicationSupportDirectory.standardizedFileURL.path + "/")
     }
 
     func editedHistoryURL(forCapturePaths capturePaths: [String]) -> URL? {

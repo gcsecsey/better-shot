@@ -81,6 +81,7 @@ struct MediaGalleryItem: Identifiable {
             return [RecordingSession.sessionDirectory(containing: url) ?? url]
         }
         return [url, ScreenshotHistoryStore.editDocumentURL(for: url),
+                ScreenshotHistoryStore.originalImageURL(for: url),
                 ScreenshotHistoryStore.baseImageURL(for: url), CaptureOrchestrator.baseImageURL(for: url)]
     }
 

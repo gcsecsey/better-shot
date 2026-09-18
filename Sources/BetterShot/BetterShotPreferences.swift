@@ -334,6 +334,10 @@ enum ScreenshotFileActions {
                 _ = try renderedURL.checkResourceIsReachable()
                 return existing
             }
+            let store = ScreenshotHistoryStore.shared
+            if store.externalOriginURL(for: captureURL)?.standardizedFileURL == existing.standardizedFileURL {
+                try store.preserveExternalOriginal(from: existing, for: renderedURL)
+            }
             try replaceExistingExport(from: renderedURL, at: existing,
                                       compressionQuality: BetterShotPreferences.compressionQuality)
             destination = existing
