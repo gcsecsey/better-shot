@@ -718,6 +718,14 @@ private func checkExternalImageSaving(image: CGImage, directory: URL) throws {
     precondition((try? Data(contentsOf: tiff)) == original, "TIFF fallback must leave the original unchanged")
     precondition(ScreenshotImageLoader.imageSize(at: saved) == CGSize(width: 1920, height: 1080))
     print("PASS unsupported external formats save to the configured folder without changing the original")
+    let jpeg = directory.appendingPathComponent("unchanged.jpg")
+    try ScreenshotFileActions.replaceExistingExport(from: tiff, at: jpeg, compressionQuality: 0.2)
+    let jpegBytes = try Data(contentsOf: jpeg)
+    for _ in 0..<2 {
+        _ = try ScreenshotFileActions.saveCapture(from: jpeg, for: jpeg, replacing: jpeg)
+        precondition((try? Data(contentsOf: jpeg)) == jpegBytes, "Saving an untouched JPEG must preserve its bytes")
+    }
+    print("PASS repeated Save of an untouched JPEG preserves its bytes")
 }
 
 @MainActor

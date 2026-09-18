@@ -330,6 +330,10 @@ enum ScreenshotFileActions {
         let destination: URL
         if let existing = exportURL ?? HistoryStore.shared.annotationExportURL(for: captureURL),
            exportContentType(for: existing) != nil {
+            if renderedURL.standardizedFileURL == existing.standardizedFileURL {
+                _ = try renderedURL.checkResourceIsReachable()
+                return existing
+            }
             try replaceExistingExport(from: renderedURL, at: existing,
                                       compressionQuality: BetterShotPreferences.compressionQuality)
             destination = existing
