@@ -328,7 +328,8 @@ enum ScreenshotFileActions {
         let captureURL = captureURL ?? renderedURL
         let record = HistoryStore.shared.record(matching: captureURL)
         let destination: URL
-        if let existing = exportURL ?? HistoryStore.shared.annotationExportURL(for: captureURL) {
+        if let existing = exportURL ?? HistoryStore.shared.annotationExportURL(for: captureURL),
+           exportContentType(for: existing) != nil {
             try replaceExistingExport(from: renderedURL, at: existing,
                                       compressionQuality: BetterShotPreferences.compressionQuality)
             destination = existing

@@ -100,6 +100,8 @@ struct ExportIntegration {
             source as CFURL, UTType.png.identifier as CFString, 1, nil)!
         CGImageDestinationAddImage(destination, image, nil)
         precondition(CGImageDestinationFinalize(destination))
+        try checkExternalImageSaving(image: image, directory: directory)
+        if ProcessInfo.processInfo.environment["BETTERSHOT_CHECK_EXTERNAL_IMAGE_SAVING"] == "1" { return }
         try benchmarkImageExports(image: image, directory: directory)
         try await checkCaptureStorage(image: image, source: source, directory: directory)
         try await checkScreenshotCopyAndSave(source: source, directory: directory)
@@ -693,6 +695,29 @@ struct ExportIntegration {
         await writer.finishWriting()
         precondition(writer.status == .completed)
     }
+}
+
+@MainActor
+private func checkExternalImageSaving(image: CGImage, directory: URL) throws {
+    let oldFolder = AppPreferences.saveDirectory
+    let oldFormat = AppPreferences.exportFormat
+    defer {
+        AppPreferences.saveDirectory = oldFolder
+        AppPreferences.exportFormat = oldFormat
+    }
+    let folder = directory.appendingPathComponent("external-saves")
+    AppPreferences.saveDirectory = folder.path
+    AppPreferences.exportFormat = .png
+    let tiff = directory.appendingPathComponent("external.tiff")
+    let writer = CGImageDestinationCreateWithURL(tiff as CFURL, UTType.tiff.identifier as CFString, 1, nil)!
+    CGImageDestinationAddImage(writer, image, nil)
+    precondition(CGImageDestinationFinalize(writer))
+    let original = try Data(contentsOf: tiff)
+    let saved = try ScreenshotFileActions.saveCapture(from: tiff, for: tiff, replacing: tiff)
+    precondition(saved.deletingLastPathComponent().path == folder.path && saved.pathExtension == "png")
+    precondition((try? Data(contentsOf: tiff)) == original, "TIFF fallback must leave the original unchanged")
+    precondition(ScreenshotImageLoader.imageSize(at: saved) == CGSize(width: 1920, height: 1080))
+    print("PASS unsupported external formats save to the configured folder without changing the original")
 }
 
 @MainActor
