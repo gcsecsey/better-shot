@@ -14,6 +14,7 @@ func checkEditorUI(imageURL: URL, movieURL: URL) async throws {
     checkTransferToastPresentation(movieURL: movieURL)
     try await checkGeneralEditorDefaults(movieURL: movieURL)
     try await checkCameraAspectRatios(movieURL: movieURL)
+    try checkExternalImageOpenAndSave(imageURL: imageURL)
     for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
         NSAppearance(named: appearanceName)!.performAsCurrentDrawingAppearance {
             let neutral = StudioChrome.accentNSColor.usingColorSpace(.deviceRGB)!
@@ -938,6 +939,74 @@ private func checkMediaGallery(imageURL: URL, movieURL: URL) async throws {
     print("PASS gallery source merging, project reopening, local/cloud/type/search filters, missing local shares, and compact/light/dark layouts")
 }
 
+
+/// Images opened from Finder save back over themselves; captures do not.
+@MainActor
+private func checkExternalImageOpenAndSave(imageURL: URL) throws {
+    let fm = FileManager.default
+    let store = ScreenshotHistoryStore.shared
+
+    let presenter = PreviewPanelPresenter.shared
+    let restoreAnnotate = presenter.onAnnotate
+    defer { presenter.onAnnotate = restoreAnnotate }
+    presenter.onAnnotate = nil
+    let queued = URL(fileURLWithPath: "/tmp/queued-before-scene.png")
+    presenter.openEditor(for: queued)
+    var openedInEditor: [URL] = []
+    presenter.onAnnotate = { openedInEditor.append($0) }
+    precondition(openedInEditor == [queued],
+                 "A file opened before the editor scene is ready still opens")
+    let outsideDir = fm.temporaryDirectory
+        .appendingPathComponent("BetterShotOpenWith-\(UUID().uuidString)", isDirectory: true)
+    try fm.createDirectory(at: outsideDir, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: outsideDir) }
+
+    let outsideURL = outsideDir.appendingPathComponent("desktop-shot.png")
+    try fm.copyItem(at: imageURL, to: outsideURL)
+    precondition(store.externalOriginURL(for: outsideURL)?.path == outsideURL.path,
+                 "An image opened from outside BetterShot saves back over itself")
+
+    let importedURL = store.importScreenshot(from: outsideURL, sourceCapturePath: outsideURL.path)
+    precondition(store.externalOriginURL(for: importedURL)?.path == outsideURL.path,
+                 "Reopening an edited image keeps writing to the same outside file")
+
+    let stagedSource = ScreenshotHistoryStore.applicationSupportDirectory
+        .appendingPathComponent("deck", isDirectory: true)
+        .appendingPathComponent("staged-\(UUID().uuidString).png")
+    try fm.createDirectory(at: stagedSource.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try fm.copyItem(at: imageURL, to: stagedSource)
+    let capturedURL = store.importScreenshot(from: stagedSource, sourceCapturePath: stagedSource.path)
+    precondition(store.externalOriginURL(for: capturedURL) == nil,
+                 "A capture must keep saving into the configured save folder")
+
+    let editedRender = outsideDir.appendingPathComponent("edited-render.png")
+    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 8, pixelsHigh: 8,
+                               bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                               isPlanar: false, colorSpaceName: .deviceRGB,
+                               bytesPerRow: 0, bitsPerPixel: 0)!
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+    NSColor.red.setFill()
+    NSRect(x: 0, y: 0, width: 8, height: 8).fill()
+    NSGraphicsContext.restoreGraphicsState()
+    try rep.representation(using: .png, properties: [:])!.write(to: editedRender)
+
+    let beforeSave = try Data(contentsOf: outsideURL)
+    let destination = try ScreenshotFileActions.saveCapture(
+        from: editedRender, for: outsideURL, replacing: store.externalOriginURL(for: importedURL))
+    precondition(destination.path == outsideURL.path,
+                 "Save writes to the file the image was opened from, not the save folder")
+    let afterSave = try Data(contentsOf: outsideURL)
+    let renderedBytes = try Data(contentsOf: editedRender)
+    precondition(afterSave != beforeSave, "The original file actually changed")
+    precondition(afterSave == renderedBytes,
+                 "The edited pixels are what land in the original file")
+
+    try fm.removeItem(at: outsideURL)
+    precondition(store.externalOriginURL(for: importedURL) == nil,
+                 "A deleted original falls back to the save folder instead of failing")
+    print("PASS outside images open before the scene is ready and save back over themselves; captures use the save folder")
+}
 
 @MainActor
 private func checkGalleryDeletion(imageURL: URL, movieURL: URL, root: URL) async throws {

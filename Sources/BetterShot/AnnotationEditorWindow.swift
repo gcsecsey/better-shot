@@ -104,7 +104,7 @@ struct AnnotationEditorWindow: View {
             }
             .task(id: url) {
                 clearInspectorFocus()
-                lastExportURL = nil
+                lastExportURL = url.flatMap { ScreenshotHistoryStore.shared.externalOriginURL(for: $0) }
                 model.load(url: url, dismiss: dismissWindow)
             }
             .onAppear {
@@ -726,7 +726,8 @@ struct AnnotationEditorWindow: View {
                 )
                 flashSaveConfirmation()
             } catch {
-                model.errorMessage = "Failed to save annotation: \(error.localizedDescription)"
+                let name = lastExportURL?.lastPathComponent ?? "annotation"
+                model.errorMessage = "Failed to save \(name): \(error.localizedDescription)"
             }
         }
     }

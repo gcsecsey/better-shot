@@ -29,17 +29,28 @@ enum PreviewPeekTab {
 final class PreviewPanelPresenter {
     static let shared = PreviewPanelPresenter()
 
-    var onAnnotate: ((URL) -> Void)?
-    var onEditVideo: ((URL) -> Void)?
+    var onAnnotate: ((URL) -> Void)? { didSet { flushPendingEditors() } }
+    var onEditVideo: ((URL) -> Void)? { didSet { flushPendingEditors() } }
+
+    /// Files opened at launch arrive before the scene installs the handlers.
+    private var pendingEditorURLs: [URL] = []
 
     func show(displayID: CGDirectDisplayID?) {}
 
     func openEditor(for url: URL) {
         let ext = url.pathExtension.lowercased()
-        if ext == "mov" || ext == "mp4" {
-            onEditVideo?(url)
-        } else {
-            onAnnotate?(url)
+        let handler = (ext == "mov" || ext == "mp4") ? onEditVideo : onAnnotate
+        guard let handler else {
+            pendingEditorURLs.append(url)
+            return
         }
+        handler(url)
+    }
+
+    private func flushPendingEditors() {
+        guard !pendingEditorURLs.isEmpty else { return }
+        let urls = pendingEditorURLs
+        pendingEditorURLs.removeAll()
+        for url in urls { openEditor(for: url) }
     }
 }

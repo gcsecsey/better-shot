@@ -6,6 +6,8 @@ import TipKit
 final class BetterShotDelegate: NSObject, NSApplicationDelegate {
     private var didFinishLaunching = false
     private var pendingURLActions: [CaptureURLAction] = []
+    private var pendingImageURLs: [URL] = []
+    private var launchedToOpenFiles = false
 
     /// The notification delegate has to be in place before launch finishes,
     /// or the system handles clicks on export notifications itself and never
@@ -30,7 +32,7 @@ final class BetterShotDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async {
             if OnboardingState.shouldPresent() {
                 OnboardingWindowController.shared.show()
-            } else {
+            } else if !self.launchedToOpenFiles {
                 RecordingBarPresenter.shared.showPicker(activate: false)
             }
         }
@@ -51,11 +53,21 @@ final class BetterShotDelegate: NSObject, NSApplicationDelegate {
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        pendingURLActions.append(contentsOf: urls.compactMap(CaptureURLAction.init(url:)))
+        let route = OpenedURLRouting.route(urls)
+        pendingURLActions.append(contentsOf: route.actions)
+        pendingImageURLs.append(contentsOf: route.images)
+        // Drained before the deferred launch block runs, so record the intent.
+        if !didFinishLaunching, !route.images.isEmpty { launchedToOpenFiles = true }
         if didFinishLaunching { performPendingURLActions() }
     }
 
     private func performPendingURLActions() {
+        let images = pendingImageURLs
+        pendingImageURLs.removeAll()
+        for imageURL in images {
+            PreviewPanelPresenter.shared.openEditor(for: imageURL)
+        }
+
         let actions = pendingURLActions
         pendingURLActions.removeAll()
         guard !actions.isEmpty else { return }

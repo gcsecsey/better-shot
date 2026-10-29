@@ -5,6 +5,13 @@ All notable changes to Better Shot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Edit existing images from Finder**: BetterShot registers as a handler for PNG and JPEG files, so right-click > Open With > BetterShot opens the picture in the image editor. Get Info > Open with > Change All… can make it the default for a file type. Selecting several files opens each one in its own editor tab, and starting BetterShot this way no longer shows the capture bar.
+- Editor Save now writes back to the file an image was opened from, instead of adding a copy to the configured save folder. This covers Open With, dropping a file on the menu bar icon, and the Open Image shortcut. BetterShot keeps the untouched original and the annotation document in its own storage, so re-opening the same file restores the editable annotations and keeps saving to it. Captures are unchanged and still save to the configured folder.
+
 ## [0.5.3] - 2026-09-11
 
 ### Added
